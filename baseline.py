@@ -1,24 +1,15 @@
-# 使用 vllm,使用方式见GitHub vllm
-#这是我的服务器启动
-# vllm serve /mnt/home/user04/CCL/model/Qwen2.5-7B-Instruct  --served-model-name qwen2.5-7b   --max_model_len 20000 
-import os
 import json
-from openai import OpenAI
 from tqdm import tqdm
 import re
 import dotenv
+from utils import client, get_prompt
+
 dotenv.load_dotenv()
-# 设置 HTTP 代理
-openai_api_key = os.getenv("API_KEY")
-openai_api_base = "https://api.siliconflow.cn/v1"
-client = OpenAI(
-    base_url=openai_api_base,
-    api_key=openai_api_key
-)
 model = 'Qwen/Qwen3-8B'
 print(model)
-with open("prompts/version1.txt", "r", encoding="utf-8") as f:
-    prompt = f.read()
+
+prompt = get_prompt("version2.txt")
+
 def get_response(data):
     global prompt
     for _ in range(3):  # 三次重传机制
@@ -28,13 +19,11 @@ def get_response(data):
                 messages=[{"role": "user", "content": prompt % data}],
                 stream=False
             )
-            # print(response)
             content = response.choices[0].message.content.strip()
-            # 使用正则提取 JSON 格式的内容（匹配 { } 之间的内容）
             match = re.search(r'\{.*\}', content, re.DOTALL)
             if match:
-                answer = match.group(0)  # 获取匹配的 JSON 字符串
-                answer = answer.strip()  # 去除前后空格
+                answer = match.group(0)
+                answer = answer.strip()
                 answer = json.loads(answer)
                 return answer
         except json.JSONDecodeError:
