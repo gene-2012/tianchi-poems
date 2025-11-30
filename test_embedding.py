@@ -25,7 +25,7 @@ for root, dirs, files in os.walk('train-data'):
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 handle_data(data)
-                result.append(data)
+                result.extend(data)
             print(f"处理完成 {file_path}")
 
 with open('train-data/result.json', 'w', encoding='utf-8') as f:

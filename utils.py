@@ -75,3 +75,9 @@ def get_prompt(filename):
         error_msg = f"Failed to read prompt file {filename}: {e}"
         logger.error(error_msg)
         raise IOError(error_msg)
+    
+def k_nearest_neighbors(embedding, embeddings, k=5):
+    return np.argsort(np.linalg.norm(embedding - embeddings, axis=1))[:k]
+
+def filter_content(item, exclude_keys):
+    return {k: v for k, v in item.items() if k not in exclude_keys}
