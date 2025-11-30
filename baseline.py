@@ -4,14 +4,28 @@ import re
 import dotenv
 import numpy as np
 import logging
-from utils import client, get_prompt, k_nearest_neighbors, get_embedding, filter_content
+import os
+from utils import (
+    client, 
+    get_prompt, 
+    k_nearest_neighbors, 
+    get_embedding, 
+    filter_content,
+    create_model_client
+)
 
 # 获取当前模块的logger
 logger = logging.getLogger(__name__)
 
 dotenv.load_dotenv()
-model = 'Qwen/Qwen3-8B'
-print(model)
+
+# 通过环境变量确定使用的模型客户端类型，默认为 siliconflow
+MODEL_CLIENT_TYPE = os.getenv("MODEL_CLIENT_TYPE", "siliconflow")  # "siliconflow" 或 "ollama"
+model_client = create_model_client(MODEL_CLIENT_TYPE)
+
+# 模型名称可以通过环境变量配置
+model = os.getenv("MODEL_NAME", "Qwen/Qwen3-8B")
+print(f"Using model: {model} with client: {MODEL_CLIENT_TYPE}")
 
 prompt = get_prompt("version2.txt")
 with open("train-data/result.json", "r", encoding="utf-8") as f:
@@ -19,7 +33,7 @@ with open("train-data/result.json", "r", encoding="utf-8") as f:
     train_embeddings = np.array([item['embedding'] for item in train_set])
 
 def get_response(data):
-    global prompt
+    global prompt, model_client
     try:
         embedding = get_embedding(data['content'])
         if embedding.size == 0:
@@ -27,13 +41,6 @@ def get_response(data):
             return None
             
         nearest_neighbors = k_nearest_neighbors(embedding, train_embeddings)
-        
-        # 尝试直接返回最近邻的结果
-        for neighbor in nearest_neighbors:
-            if train_set[neighbor].get('content'):
-                logger.info(f"Returning content from training set for index: {data.get('index', 'unknown')}")
-                return train_set[neighbor]['content']
-                
         # 构造邻居提示内容，排除embedding字段
         neighbor_prompts = '\n'.join(
             str(filter_content(train_set[i], exclude_keys=['embedding'])) 
@@ -44,10 +51,10 @@ def get_response(data):
         
         for attempt in range(3):  # 三次重传机制
             try:
-                response = client.chat.completions.create(
-                    model=model,
+                # 使用统一的模型客户端接口
+                response = model_client.chat_completion(
                     messages=[{"role": "user", "content": cur_prompt}],
-                    stream=False
+                    model=model
                 )
                 content = response.choices[0].message.content.strip()
                 match = re.search(r'\{.*\}', content, re.DOTALL)

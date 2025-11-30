@@ -81,3 +81,99 @@ def k_nearest_neighbors(embedding, embeddings, k=5):
 
 def filter_content(item, exclude_keys):
     return {k: v for k, v in item.items() if k not in exclude_keys}
+
+class ModelClient:
+    """
+    统一的模型客户端接口
+    """
+    def chat_completion(self, messages, model=None):
+        """
+        调用聊天完成接口
+        
+        Args:
+            messages: 消息列表
+            model: 模型名称
+            
+        Returns:
+            模型响应对象
+        """
+        raise NotImplementedError
+
+class SiliconFlowModelClient(ModelClient):
+    """
+    SiliconFlow 平台模型客户端
+    """
+    def __init__(self, client):
+        self.client = client
+    
+    def chat_completion(self, messages, model=None):
+        return self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=False
+        )
+
+class OllamaModelClient(ModelClient):
+    """
+    Ollama 模型客户端
+    """
+    def __init__(self):
+        try:
+            from ollama import Client
+            self.client = Client()
+            logger.info("Ollama client initialized successfully")
+        except ImportError:
+            logger.error("Ollama package not installed. Please install it with: pip install ollama")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to initialize Ollama client: {e}")
+            raise
+    
+    def chat_completion(self, messages, model=None):
+        """
+        调用 Ollama 聊天完成接口
+        
+        Args:
+            messages: 消息列表
+            model: 模型名称
+            
+        Returns:
+            模拟的响应对象，与 OpenAI API 兼容
+        """
+        try:
+            response = self.client.chat(
+                model=model or 'qwen3:0.6b',
+                messages=messages
+            )
+            
+            # 创建与 OpenAI API 兼容的响应对象
+            class MockResponse:
+                def __init__(self, content):
+                    self.choices = [type('Choice', (), {
+                        'message': type('Message', (), {
+                            'content': content
+                        })()
+                    })]
+            
+            return MockResponse(response['message']['content'])
+        except Exception as e:
+            logger.error(f"Ollama API call failed: {e}")
+            raise
+
+def create_model_client(client_type="siliconflow", **kwargs):
+    """
+    工厂函数，创建模型客户端实例
+    
+    Args:
+        client_type: 客户端类型 ("siliconflow", "ollama")
+        **kwargs: 其他参数
+        
+    Returns:
+        ModelClient 实例
+    """
+    if client_type == "siliconflow":
+        return SiliconFlowModelClient(client)
+    elif client_type == "ollama":
+        return OllamaModelClient()
+    else:
+        raise ValueError(f"Unsupported client type: {client_type}")
